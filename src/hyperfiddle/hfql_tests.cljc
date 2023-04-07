@@ -1,13 +1,14 @@
 (ns hyperfiddle.hfql-tests
   (:require
-   [hyperfiddle.api :as hf :refer [hfql]]
-   [hyperfiddle.hfql :as hfql]
+   [hyperfiddle.api :as hf]
+   [hyperfiddle.hfql :as hfql :refer [hfql]]
    [hyperfiddle.electric :as p]
    [hyperfiddle.rcf :as rcf :refer [tests with tap %]]
    [datascript.core :as d]
    [clojure.string :as str]
    [clojure.spec.alpha :as s]
-   #?(:clj [wip.orders-datascript :refer [orders order shirt-sizes one-order nav! schema]])
+   #?(:clj [example-datascript-db :refer [nav! get-schema]])
+   #?(:clj [orders-datascript :refer [orders order shirt-sizes one-order]])
    )
   (:import [hyperfiddle.electric Pending]))
 
@@ -60,7 +61,7 @@
 (tests
   (with (p/run (tap (binding [hf/db     hf/*$*
                               hf/*nav!* nav!
-                              hf/*schema* schema]
+                              hf/*schema* get-schema]
                       (hfql [] [{:order/gender [:db/ident]}] 9) ))))
   % := {:order/gender {:db/ident :order/female}})
 
@@ -80,7 +81,7 @@
   "Two levels of nesting"
   (with (p/run (tap (binding [hf/db     hf/*$*
                               hf/*nav!* nav!
-                              hf/*schema* schema]
+                              hf/*schema* get-schema]
                       (hfql {(order "") [{:order/shirt-size [:db/ident]}]}) ))))
   % := {`(order "") {:order/shirt-size {:db/ident :order/womens-large}}})
 
@@ -104,7 +105,7 @@
 (tests
   (p/run (tap (binding [hf/db       hf/*$*
                         hf/*nav!*   nav!
-                        hf/*schema* schema
+                        hf/*schema* get-schema
                         hf/Render hfql/EdnRender]
                 (hfql [] [{(props :order/gender {::hf/render Ignoring-renderer})
                            [(props :db/ident {::hf/render Throwing-renderer})]}]
@@ -121,7 +122,7 @@
 (tests
   (with (p/run (tap (binding [hf/db       hf/*$*
                               hf/*nav!*   nav!
-                              hf/*schema* schema
+                              hf/*schema* get-schema
                               hf/Render hfql/EdnRender]
                       (hfql [] [(props :order/shirt-size {::hf/render  Select-option-renderer
                                                           ::hf/options (shirt-sizes :order/female "")})]
@@ -135,7 +136,7 @@
   (with (p/run
           (tap (binding [hf/db       hf/*$*
                          hf/*nav!*   nav!
-                         hf/*schema* schema
+                         hf/*schema* get-schema
                          hf/Render hfql/EdnRender]
                  (hfql [] {(props :order/shirt-size {::hf/render  Select-option-renderer
                                                      ::hf/options (shirt-sizes :order/female "")})
@@ -149,7 +150,7 @@
   "Argument reference"
   (with (p/run (tap (binding [hf/db       hf/*$*
                               hf/*nav!*   nav!
-                              hf/*schema* schema
+                              hf/*schema* get-schema
                               hf/Render hfql/EdnRender]
                       (hfql [] [{:order/gender [:db/ident]}
                                 (props :order/shirt-size {::hf/render  Select-option-renderer
@@ -163,7 +164,7 @@
     "Argument reference under card n"
     (with (p/run (try (tap (binding [hf/db       hf/*$*
                                      hf/*nav!*   nav!
-                                     hf/*schema* schema
+                                     hf/*schema* get-schema
                                      hf/Render hfql/EdnRender]
                              (hfql [] {(orders "") [{:order/gender [:db/ident]}
                                                     (props :order/shirt-size {::hf/render  Select-option-renderer
@@ -185,7 +186,7 @@
           needle2 "small"]
       (with (p/run (try (tap (binding [hf/db       hf/*$*
                                        hf/*nav!*   nav!
-                                       hf/*schema* schema
+                                       hf/*schema* get-schema
                                        hf/Render hfql/EdnRender]
                                (hfql [] {(orders needle1) [:order/email
                                                            {:order/gender [(props :db/ident {::hf/as gender})]}
@@ -194,7 +195,7 @@
                                                             [:db/ident]}]}
                                  9) ))
                         (catch Pending _)))))
-    % := {'(wip.orders-datascript/orders needle1)
+    % := {'(orders-datascript/orders needle1)
           [{:order/shirt-size
             [:select
              {:value {:db/ident :order/womens-large}}
@@ -223,7 +224,7 @@
   "free inputs"
   (with (p/run (try (tap (binding [hf/db       hf/*$*
                                    hf/*nav!*   nav!
-                                   hf/*schema* schema
+                                   hf/*schema* get-schema
                                    hf/Render hfql/EdnRender]
                            (hfql {(orders .) [{:order/gender [(props :db/ident {::hf/as gender})]}
                                               {(props :order/shirt-size {::hf/render  Typeahead-option-renderer
@@ -232,7 +233,7 @@
                     (catch Pending _))))
   % := _
   % := _
-  % := {'(wip.orders-datascript/orders .)
+  % := {'(orders-datascript/orders .)
    [{:order/gender {:db/ident :order/female},
      :order/shirt-size
      [:select
@@ -269,7 +270,7 @@
                         (hfql [hf/*$* hf/db]
                           {(orders "") [:db/id suber-name]}) ))
                     (catch Pending _))))
-  % := `{(wip.orders-datascript/orders "") [{:db/id 9, suber-name "alice"} {:db/id 10, suber-name "bob"} {:db/id 11, suber-name "charlie"}]})
+  % := `{(orders-datascript/orders "") [{:db/id 9, suber-name "alice"} {:db/id 10, suber-name "bob"} {:db/id 11, suber-name "charlie"}]})
 
 (def ^:dynamic *db*)
 
@@ -277,7 +278,7 @@
 
 (defn bound-order [needle]
   #?(:clj (binding [hf/*$* *db*]
-            (wip.orders-datascript/order needle))))
+            (orders-datascript/order needle))))
 
 (tests
   "Binding conveyance"
@@ -425,7 +426,7 @@
   "HFQL on top level entity"
   (with (p/run (tap (debug (binding [hf/db     hf/*$*
                                      hf/*nav!* nav!
-                                     hf/*schema* schema]
+                                     hf/*schema* get-schema]
                              (hfql {12 [:db/id]}))))))
   % := '{12 {:db/id 12}})
 
@@ -436,7 +437,7 @@
   ;; the entity at point
   (with (p/run (tap (debug (binding [hf/db     hf/*$*
                                      hf/*nav!* nav!
-                                     hf/*schema* schema]
+                                     hf/*schema* get-schema]
                              (let [e 12]
                                (hfql {e [:db/id]})))))))
   % := '{e {:db/id 12}})
@@ -493,7 +494,7 @@
   "Navigate through Electric function"
   (with (p/run (tap (debug (binding [hf/db     hf/*$*
                                      hf/*nav!* nav!
-                                     hf/*schema* schema]
+                                     hf/*schema* get-schema]
                              (hfql {(Foo. 9) [:order/email]}))))))
   % := `{(hyperfiddle.hfql-tests/Foo 9) {:order/email "alice@example.com"}})
 
