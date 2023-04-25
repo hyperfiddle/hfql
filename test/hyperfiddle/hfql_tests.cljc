@@ -7,8 +7,8 @@
    [datascript.core :as d]
    [clojure.string :as str]
    [clojure.spec.alpha :as s]
-   #?(:clj [example-datascript-db :refer [nav! get-schema]])
-   #?(:clj [orders-datascript :refer [orders order shirt-sizes one-order]])
+   [example-datascript-db :refer [nav! get-schema]]
+   [orders-datascript :refer [orders order shirt-sizes one-order]]
    )
   (:import [hyperfiddle.electric Pending]))
 

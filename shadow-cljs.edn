@@ -1,0 +1,7 @@
+{:builds {:browser-test {:target           :karma
+                         :output-to        "out/karma-tests.js"
+                         :ns-regexp        "hyperfiddle.hfql.*"
+                         :build-options    {:cache-level :off}
+                         :modules          {:main {:entries [hyperfiddle.hfql-tests
+                                                             contrib.ednish]}}
+                         :compiler-options {:warnings {:redef-in-file false}}}}}

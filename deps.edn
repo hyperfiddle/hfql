@@ -3,7 +3,13 @@
            missionary/missionary    {:mvn/version "b.28"}
            com.hyperfiddle/rcf      {:mvn/version "20220926-202227"}
            datascript/datascript    {:mvn/version "1.3.14"}
-           com.hyperfiddle/electric {:git/url        "https://github.com/hyperfiddle/electric.git"
-                                     :git/sha        "a6cbc88b22f2953da2c9a75f178576fb1abf893a"}}
- :aliases {:test {:extra-paths ["test"]}
-           :dev {:override-deps {com.hypefiddle/electric {:local/root "../electric"}}}}}
+           com.hyperfiddle/electric {:git/url "https://github.com/hyperfiddle/electric.git"
+                                     :git/sha "a6cbc88b22f2953da2c9a75f178576fb1abf893a"}}
+ :aliases {:dev       {:override-deps {com.hypefiddle/electric {:local/root "../electric"}}}
+           :test-jvm  {:extra-paths ["test"]
+                       :jvm-opts    ["-XX:-OmitStackTraceInFastThrow"] ;; https://archive.md/NNt9r
+                       :exec-fn     test/-main}
+           :test-cljs {:extra-paths ["test"]
+                       :extra-deps  {thheller/shadow-cljs {:mvn/version "2.22.10"}}
+                       :jvm-opts    ["-Dhyperfiddle.rcf.generate-tests=true" "-Xss2m"]
+                       :main-opts   ["-m" "shadow.cljs.devtools.cli"]}}}
