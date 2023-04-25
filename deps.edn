@@ -4,6 +4,6 @@
            com.hyperfiddle/rcf      {:mvn/version "20220926-202227"}
            datascript/datascript    {:mvn/version "1.3.14"}
            com.hyperfiddle/electric {:git/url        "https://github.com/hyperfiddle/electric.git"
-                                     :git/sha        "f16e85ba1e4844be28a747ccd9a3d91c41db6d50"
+                                     :git/sha        "a6cbc88b22f2953da2c9a75f178576fb1abf893a"
                                      #_#_:local/root "../electric"}}
  :aliases {:test {:extra-paths ["test"]}}}
