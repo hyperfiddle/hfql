@@ -121,7 +121,7 @@
      (binding [Table     Table-impl
                Form      Form-impl
                Render    Render-impl
-               hf/Render Render-impl]
+               hfql/Render Render-impl]
        (p/client ; FIXME don’t force body to run on the client
          (binding [grid-row 1
                    grid-col 1]
