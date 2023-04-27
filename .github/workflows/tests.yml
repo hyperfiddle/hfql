@@ -6,7 +6,7 @@ on:
   pull_request:
 jobs:
   jvm:
-    name: Run JVM tests
+    name: JVM tests
     runs-on: [ubuntu-latest]
     timeout-minutes: 5
     steps:
@@ -34,3 +34,50 @@ jobs:
 
     - name: Run tests
       run: clojure -X:test-jvm
+  browser:
+    name: Browser tests
+    runs-on: [ubuntu-latest]
+    timeout-minutes: 5
+    steps:
+    - uses: actions/checkout@v3
+
+    - run: git status
+
+    - uses: actions/setup-java@v3
+      with:
+        distribution: 'temurin'
+        java-version: '11'
+
+    - name: Cache local Maven repository
+      uses: actions/cache@v3
+      with:
+         path: ~/.m2/repository
+         key: ${{ runner.os }}-maven-${{ hashFiles('**/deps.edn') }}
+         restore-keys: |
+           ${{ runner.os }}-maven-
+
+    - name: Use Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: 18.x
+
+    - name: NPM install
+      run: npm install --include=dev
+
+    # Install chrome and dependencies, puppeteer fails otherwise
+    - run: sudo apt-get update && sudo apt-get install -y wget gnupg
+    - run: wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+    - run: sudo sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list'
+    - run: sudo apt-get update && sudo apt-get install -y google-chrome-stable fonts-ipafont-gothic fonts-wqy-zenhei fonts-thai-tlwg fonts-kacst fonts-freefont-ttf libxss1 --no-install-recommends
+    # - run: rm -rf /var/lib/apt/lists/*
+
+    - name: Install clojure tools
+      uses: DeLaGuardo/setup-clojure@10.2
+      with:
+        cli: 1.11.1.1113
+
+    - name: Compile tests
+      run: clojure -M:test-cljs compile browser-test --force-spawn
+
+    - name: Run tests
+      run: ./node_modules/.bin/karma start --single-run

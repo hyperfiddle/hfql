@@ -5,7 +5,8 @@
             contrib.str
             [datascript.core :as d]
             [hyperfiddle.api :as hf]
-            [hyperfiddle.rcf :refer [tap % tests]]))
+            [hyperfiddle.rcf :refer [tap % tests]])
+  #?(:cljs (:require-macros orders-datascript)))
 
 (s/fdef genders :args (s/cat) :ret (s/coll-of number?))
 (defn genders []
@@ -21,7 +22,7 @@
   ; datascript does not
   (sort
     (if gender
-      (d/q '[:in $ ?gender ?needle
+      (d/q '[:in $ ?gender ?needle ?includes-str? ; injected for cljs compat: no runtime resolve
              :find [?e ...]
              :where
              [?e :order/type :order/shirt-size]
@@ -29,18 +30,19 @@
              [?g :db/ident ?gender]
              [?e :db/ident ?ident]  ; remove
              [(name ?ident) ?nm]
-             [(contrib.str/includes-str? ?nm ?needle)]]
+             [(?includes-str? ?nm ?needle)]]
            hf/*$*
-           gender (or needle ""))
-      (d/q '[:in $ ?needle
+           gender (or needle "") contrib.str/includes-str?)
+      (d/q '[:in $ ?needle ?includes-str?
              :find [?e ...]
              :where
              [?e :order/type :order/shirt-size]
              [?e :db/ident ?ident]
              [(name ?ident) ?nm]
-             [(contrib.str/includes-str? ?nm ?needle)]]
+             [(?includes-str? ?nm ?needle)]]
            hf/*$*
-           (or needle "")))))
+           (or needle "")
+           contrib.str/includes-str?))))
 
 (tests
   (shirt-sizes :order/female #_2 "") := [6 7 8]

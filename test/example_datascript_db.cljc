@@ -39,7 +39,8 @@
 
 (defn setup-db! []
   (def conn (d/create-conn schema))
-  (alter-var-root #'hf/*$* (constantly (fixtures (d/db conn)))))
+  #?(:clj (alter-var-root #'hf/*$* (constantly (fixtures (d/db conn))))
+     :cljs (set! hf/*$* (fixtures (d/db conn)))))
 
 (setup-db!)
 
@@ -121,6 +122,6 @@
     := {:db/id female :db/ident :order/female :order/type :order/gender})
 
   (tests
-    (d/q '[:find [?e ...] :where [_ :order/gender ?e]] db)
-    := [2 1] #_[:order/male :order/female])
+    (into #{} (d/q '[:find [?e ...] :where [_ :order/gender ?e]] db))
+    := #{2 1} #_[:order/male :order/female]) ; using a set because different order on JVM and browser.
   )

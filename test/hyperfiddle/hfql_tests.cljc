@@ -10,7 +10,8 @@
    [example-datascript-db :refer [nav! get-schema]]
    [orders-datascript :refer [orders order shirt-sizes one-order]]
    )
-  (:import [hyperfiddle.electric Pending]))
+  (:import [hyperfiddle.electric Pending])
+  #?(:cljs (:require-macros [hyperfiddle.hfql-tests :refer [debug]])))
 
 (comment
   (rcf/enable! true))
@@ -19,7 +20,8 @@
   `(try ~@body
         (catch hyperfiddle.electric.Pending e# (throw e#))
         (catch missionary.Cancelled e# (throw e#))
-        (catch Throwable e# (prn (type e#) (ex-message e#) (ex-data e#) e#) (throw e#))))
+        (catch ~(if (:js-globals &env) :default 'Throwable) e#
+          (prn (type e#) (ex-message e#) (ex-data e#) e#) (throw e#))))
 
 (tests
   (with (p/run (tap (binding [hf/db     hf/*$*
@@ -268,8 +270,8 @@
 (s/fdef bound-order :args (s/cat :needle string?) :ret any?)
 
 (defn bound-order [needle]
-  #?(:clj (binding [hf/*$* *db*]
-            (orders-datascript/order needle))))
+  (binding [hf/*$* *db*]
+    (orders-datascript/order needle)))
 
 (tests
   "Binding conveyance"
