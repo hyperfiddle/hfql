@@ -14,6 +14,7 @@
             [hyperfiddle.rcf :refer [tests with % tap]]
             [missionary.core :as m]
             [hyperfiddle.history :as router])
+  (:import (hyperfiddle.electric Pending))
   #?(:cljs (:require-macros [hyperfiddle.hfql-tree-grid]))
   #?(:cljs (:refer-clojure :exclude [List])))
 
@@ -71,21 +72,6 @@
 
 (p/def Render)
 
-#?(:cljs
-   (defn -parse-float [str]
-     (let [f (js/parseFloat str)]
-       (if (NaN? f) 0 f))))
-
-#?(:cljs (def extract-borders
-           (juxt
-             #(map -parse-float (str/split (.-gridTemplateRows %) #"px\s"))
-             #(map -parse-float (str/split (.-gridTemplateColumns %) #"px\s"))
-             #(-parse-float (.-width %))
-             #(-parse-float (.-height %))
-             #(-parse-float (.-gap ^js %))
-             #(.getPropertyValue % "--hf-cell-border-color")
-             )))
-
 (defn reductions* "like reductions but stop on first reduced value"
   [f init coll]
   (reduce (fn [[r prev] v] (let [new (f prev v)]
@@ -114,6 +100,27 @@
                  (doseq [y ys] (.fillRect ctx 0 (int y) width gap)))
                ))))
 
+#?(:cljs (defn extract-borders [^js style]
+           [(.-gridTemplateRows style)
+            (.-gridTemplateColumns style)
+            (.-width style)
+            (.-height style)
+            (.-gap style)
+            (.getPropertyValue style "--hf-cell-border-color")]))
+
+#?(:cljs
+   (defn -parse-float [str]
+     (let [f (js/parseFloat str)]
+       (if (NaN? f) 0 f))))
+
+#?(:cljs (defn parse-borders [[gridTemplateRows gridTemplateColumns width height gap hf-cell-border-color]]
+           [(map -parse-float (str/split gridTemplateRows #"px\s"))
+            (map -parse-float (str/split gridTemplateColumns #"px\s"))
+            (-parse-float width)
+            (-parse-float height)
+            (-parse-float gap)
+            hf-cell-border-color]))
+
 ;; This should not be see in userland because it’s an implementation detail
 ;; driven by Photon not supporting mutual recursion as of today.
 (defmacro with-gridsheet-renderer [& body]
@@ -130,7 +137,7 @@
                ~@body)
              (let [wrapper-height# (new ComputedStyle #(-parse-float (.-height %)) dom/node)]
                (when-let [node (.querySelector dom/node ".hyperfiddle-gridsheet")]
-                 (let [[rows# columns# width# height# gap# color#] (new ComputedStyle extract-borders node)
+                 (let [[rows# columns# width# height# gap# color#] (parse-borders (new ComputedStyle extract-borders node))
                        [scroll-top# scroll-height# client-height#] (new (ui4/scroll-state< node))
                        height#                                     (if (zero? scroll-height#) height# scroll-height#)]
                    (dom/canvas (dom/props {:class  "hf-grid-overlay"
@@ -531,9 +538,21 @@
 
 (defn get-computed-style [node] #?(:cljs (js/getComputedStyle node)))
 
+#?(:cljs
+   (defn ticker [interval-ms]
+     (m/observe (fn [!]
+                  (! ::tick)
+                  (let [ref (.setInterval js/window #(! ::tick) interval-ms)]
+                    #(.clearInterval js/window ref))))))
+
+(p/defn Sampler [rate-ms f]
+  (if (= "visible" p/dom-visibility-state)
+    (new (m/relieve {} (m/eduction (dedupe) (m/sample f (ticker rate-ms))))) ; one ticker per sampler, not shared
+    (throw (Pending.))))
+
 (p/defn ComputedStyle
   "Calls the `keyfn` clojure function, passing it the given DOM node’s
-  CSSStyleDeclaration instance. `keyfn` is meant to extract a property from the
+  CSSStyleDeclaration instance. `keyfn` is meant to extract properties from the
   live computed style object."
   ;; Does not return CSSStyleDeclaration directly because a CSSStyleDeclaration
   ;; is a live object with a stable identity. m/cp would dedupe it even if
@@ -541,7 +560,7 @@
   ;; NOTE: beware of expensive keyfn
   [keyfn node]
   (let [live-object (get-computed-style node)]
-    ((fn [_time] (keyfn live-object)) p/system-time-ms)))
+    (Sampler. 250 #(keyfn live-object))))
 
 (p/defn Text [RenderF]
   (p/fn [ctx]
