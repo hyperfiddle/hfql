@@ -2,6 +2,7 @@
   #?(:cljs (:require-macros hyperfiddle.popover))
   (:import [hyperfiddle.electric Pending])
   (:require [hyperfiddle.api :as hf]
+            [hyperfiddle.hfql :as hfql]
             [hyperfiddle.electric :as e]
             [hyperfiddle.electric-dom2 :as dom]
             [hyperfiddle.electric-ui4 :as ui]
@@ -64,5 +65,5 @@
    `(popover2* ~label ~Validate ~Transact
                (ttgui/with-gridsheet-renderer
                  (e/server
-                  (hf/hfql [hf/*$* hf/db, suber.web.globals/*db* hf/db, hf/*nav!* hf/*nav!*]
+                  (hfql/hfql [hf/*$* hf/db, suber.web.globals/*db* hf/db, hf/*nav!* hf/*nav!*]
                            ~HFQL-Expr))))))
