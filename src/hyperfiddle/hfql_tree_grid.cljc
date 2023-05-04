@@ -3,6 +3,7 @@
             [hyperfiddle.api :as hf]
             [hyperfiddle.hfql :as hfql]
             [hyperfiddle.electric-dom2 :as dom]
+            [hyperfiddle.electric-svg :as svg]
             [hyperfiddle.spec :as spec]
             [hyperfiddle.spec.type :as-alias hf-type]
             [clojure.datafy :refer [datafy]]
@@ -268,21 +269,10 @@
     (cons (symbol (field-name (first attr))) (seq (::spec/keys (clojure.datafy/datafy (spec/args (first attr))))) )
     (name attr)))
 
-(defn handle-validity [node hints]
-  #?(:cljs
-     (let [node (or (.querySelector node "input") node)] ;; Find closest input child or consider current node as input
-       (if (seq hints)
-         (do (->> (map :reason hints)
-               (str/join "\n")
-               (.setCustomValidity node))
-             (.reportValidity node))
-         (.setCustomValidity node "")))))
-
 (defmacro gray-input-props [id props list-id options name readonly]
-  `(do (dom/props {:id ~id, :role "cell", :style {:grid-row grid-row, :grid-column (inc grid-col)}, :disabled ~readonly})
+  `(do (dom/props {:id ~id, :disabled ~readonly})
        (when (seq ~props) (dom/props ~props))
-       (when (some? ~options) (dom/props {::dom/list ~list-id}))
-       (handle-validity dom/node (get hf/validation-hints [~name]))))
+       (when (some? ~options) (dom/props {::dom/list ~list-id}))))
 
 ;; Idea
 ;; (p/defn ResolveSpec [s] (or (spec/resolve s) ~@(spec/resolve s)))
@@ -293,6 +283,27 @@
     (keyword? x) (subs (str x) 1)
     (= '. x)     nil
     :else        (str x)))
+
+(p/defn AlertCircleIcon [props]
+  (svg/svg (dom/props {::dom/viewBox "0 0 24 24"})
+    (dom/props props)
+    (svg/line (dom/props {:stroke-linejoin "round", :y1 "8", :stroke-linecap "round", :stroke-width "2", :x1 "12", :y2 "12", :x2 "12"}))
+    (svg/line (dom/props {:stroke-linejoin "round", :y1 "16", :stroke-linecap "round", :stroke-width "2", :x1 "12", :y2 "16", :x2 "12"}))
+    (svg/circle (dom/props {:r "10", :stroke-linejoin "round", :stroke-linecap "round", :stroke-width "2", :cx "12" :cy "12"}))))
+
+(defmacro input-validator [Validate & body]
+  `(p/client
+     (let [validate-message (new ~Validate)]
+       (dom/div (dom/props {::dom/class ["hfql-input-validator" (when validate-message "hfql-invalid")]})
+         ~@body
+         (when validate-message
+           (AlertCircleIcon. {::dom/class "hfql-input-validator-invalid-icon"})
+           (dom/span (dom/props {::dom/class "hfql-input-validator-invalid-message"})
+             (dom/span (dom/text validate-message))))))))
+
+(p/defn ValidationMessage [input-name]
+  (when-some [hints (seq (get hf/validation-hints [input-name]))]
+    (str/join "\n" (map :reason hints))))
 
 (p/defn GrayInput [label? spec props [name {::hf/keys [read path options option-label readonly] :as arg}]]
   (let [value    (read.)
@@ -315,42 +326,41 @@
 
           options?
           ;; FIXME Call Options
-          (p/server
-            (if (has-needle? arg)
-              (ui4/typeahead value (p/fn [v] (p/client (router/swap-route! assoc-in path v)))
-                options
-                (or option-label Identity)
-                (dom/props {:id list-id
-                            :role     "cell"
-                            :style    {:grid-row grid-row, :grid-column (inc grid-col)}
-                            :disabled readonly})
-                (handle-validity dom/node (get hf/validation-hints [name])))
-              (ui4/select value (p/fn [v] (p/client (router/swap-route! assoc-in path v)))
-                options
-                (or option-label Identity)
-                (dom/props {:id list-id
-                            :role     "cell"
-                            :style    {:grid-row grid-row, :grid-column (inc grid-col)}
-                            :disabled readonly})
-                (handle-validity dom/node (get hf/validation-hints [name])))))
+          (input-validator
+            (p/fn [] (ValidationMessage. name))
+            (dom/props {:role "cell", :style {:grid-row grid-row, :grid-column (inc grid-col)}})
+            (p/server
+              (if (has-needle? arg)
+                (ui4/typeahead value (p/fn [v] (p/client (router/swap-route! assoc-in path v)))
+                  options
+                  (or option-label Identity)
+                  (dom/props {:id list-id, :disabled readonly}))
+                (ui4/select value
+                  (p/fn [v] (p/client (router/swap-route! assoc-in path v)))
+                  options
+                  (or option-label Identity)
+                  (dom/props {:id list-id, :disabled readonly})))))
 
           :else
           (let [WriteToRoute (p/fn [v] (router/swap-route! assoc-in path v) nil)
                 props (assoc props :class (css-class path))]
-            (case (spec/type-of spec name) ; Always resolve specs on the server (might be defined in a .clj files)
-              (::hf-type/boolean) (ui4/checkbox value WriteToRoute (gray-input-props id props list-id options name readonly))
-              (::hf-type/double
-               ::hf-type/float)   (ui4/double   value WriteToRoute (gray-input-props id props list-id options name readonly))
-              (::hf-type/bigdec
-               ::hf-type/long)    (ui4/long     value WriteToRoute (gray-input-props id props list-id options name readonly))
-              (::hf-type/instant) (ui4/date     (when value (-> value .toISOString (subs 0 10))) WriteToRoute (gray-input-props id props list-id options name readonly))
-              (::hf-type/keyword) (ui4/keyword  value WriteToRoute (gray-input-props id props list-id options name readonly))
-              (::hf-type/symbol)  (ui4/symbol   value WriteToRoute (gray-input-props id props list-id options name readonly))
-              (::hf-type/uuid)    (ui4/uuid     value WriteToRoute (gray-input-props id props list-id options name readonly))
-              (::hf-type/string
-               ::hf-type/uri
-               ::hf-type/ref
-               nil)               (ui4/input    value WriteToRoute (gray-input-props id props list-id options name readonly)))))
+            (input-validator
+              (p/fn [] (ValidationMessage. name))
+              (dom/props {::dom/role "cell", ::dom/style {:grid-row grid-row, :grid-column (inc grid-col)}})
+              (case (spec/type-of spec name) ; Always resolve specs on the server (might be defined in a .clj files)
+                (::hf-type/boolean) (ui4/checkbox value WriteToRoute (gray-input-props id props list-id options name readonly))
+                (::hf-type/double
+                 ::hf-type/float)   (ui4/double   value WriteToRoute (gray-input-props id props list-id options name readonly))
+                (::hf-type/bigdec
+                 ::hf-type/long)    (ui4/long     value WriteToRoute (gray-input-props id props list-id options name readonly))
+                (::hf-type/instant) (ui4/date     (when value (-> value .toISOString (subs 0 10))) WriteToRoute (gray-input-props id props list-id options name readonly))
+                (::hf-type/keyword) (ui4/keyword  value WriteToRoute (gray-input-props id props list-id options name readonly))
+                (::hf-type/symbol)  (ui4/symbol   value WriteToRoute (gray-input-props id props list-id options name readonly))
+                (::hf-type/uuid)    (ui4/uuid     value WriteToRoute (gray-input-props id props list-id options name readonly))
+                (::hf-type/string
+                 ::hf-type/uri
+                 ::hf-type/ref
+                 nil)               (ui4/input    value WriteToRoute (gray-input-props id props list-id options name readonly))))))
         value))))
 
 (defn apply-1 [n F args]
