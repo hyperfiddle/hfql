@@ -173,8 +173,8 @@ body.hyperfiddle{
 	  height: 1em;
 }
 
-.hyperfiddle .hyperfiddle-gridsheet .hfql-input-validator .hfql-input-validator-invalid-message{
-    visibility:hidden;
+.hyperfiddle .hyperfiddle-gridsheet .hfql-input-validator .hfql-input-validator-invalid-message {
+	  visibility: hidden;
 	  border: 1px red solid;
 	  padding: 0 0.5em;
 	  margin-left: 1em;
@@ -186,8 +186,13 @@ body.hyperfiddle{
 	  text-align: center;
 	  display: inline-flex;
 	  align-items: center;
-    width: fit-content;
-    max-width: 100%;
+	  width: fit-content;
+	  max-width: 100%;
+	  left: 0;
+	  right: 0;
+	  margin: auto;
+	  bottom: calc(-100% - 0.8em);
+	  box-shadow: 0 0 1em lightgray;
 }
 
 
@@ -198,14 +203,17 @@ body.hyperfiddle{
 }
 
 
-.hyperfiddle .hyperfiddle-gridsheet .hfql-input-validator .hfql-input-validator-invalid-message::after{
+.hyperfiddle .hyperfiddle-gridsheet .hfql-input-validator .hfql-input-validator-invalid-message::after {
 	  content: " ";
 	  width: 0;
 	  height: 0;
 	  position: absolute;
 	  border: 0.5em transparent solid;
-	  border-right-color: red;
-	  margin-left: -1.5em;
+	  border-bottom-color: red;
+	  top: -1em;
+	  left: 0;
+	  right: 0;
+	  margin: auto;
 }
 
 .hyperfiddle .hyperfiddle-gridsheet .hfql-input-validator.hfql-invalid:hover > .hfql-input-validator-invalid-message
