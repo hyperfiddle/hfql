@@ -52,8 +52,8 @@
    `(popover2* ~label (e/fn []) ~Transact ~body))
   ([label Validate Transact & body]
    `(e/client
-     (router/router (router/proxy-history router/!history) ; sever popover state from URL
-      (new Popover2 ~label ~Validate ~Transact (e/fn [] ~@body))))))
+      #_(router/router (router/proxy-history router/!history)) ; sever popover state from URL
+      (new Popover2 ~label ~Validate ~Transact (e/fn [] ~@body)))))
 
 ;; TODO Move to own namespace so we can retire popover1
 (defmacro popover2 

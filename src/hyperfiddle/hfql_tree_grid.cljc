@@ -2,6 +2,7 @@
   (:require [hyperfiddle.electric :as p]
             [hyperfiddle.api :as hf]
             [hyperfiddle.hfql :as hfql]
+            [hyperfiddle.popover2 :as popover]
             [hyperfiddle.electric-dom2 :as dom]
             [hyperfiddle.electric-svg :as svg]
             [hyperfiddle.spec :as spec]
@@ -124,27 +125,32 @@
 
 ;; This should not be see in userland because it’s an implementation detail
 ;; driven by Photon not supporting mutual recursion as of today.
+
+(defmacro with-gridsheet-renderer* [& body]
+  `(p/client ; FIXME don’t force body to run on the client
+     (binding [grid-row 1
+               grid-col 1]
+       (dom/div (dom/props {:class "hyperfiddle-gridsheet-wrapper"})
+         (dom/div (dom/props {:class "hyperfiddle-gridsheet"})
+           ~@body)
+         (let [wrapper-height# (new ComputedStyle #(-parse-float (.-height %)) dom/node)]
+           (when-let [node (.querySelector dom/node ".hyperfiddle-gridsheet")]
+             (let [[rows# columns# width# height# gap# color#] (parse-borders (new ComputedStyle extract-borders node))
+                   [scroll-top# scroll-height# client-height#] (new (ui4/scroll-state< node))
+                   height#                                     (if (zero? scroll-height#) height# scroll-height#)]
+               (dom/canvas (dom/props {:class  "hf-grid-overlay"
+                                       :width  (str width# "px")
+                                       :height (str wrapper-height# "px")})
+                 (draw-lines! dom/node color# width# wrapper-height# gap# rows# columns#)))))))))
+
 (defmacro with-gridsheet-renderer [& body]
   `(p/server
      (binding [Table     Table-impl
                Form      Form-impl
+               Popover   Popover-impl
                Render    Render-impl
                hfql/Render Render-impl]
-       (p/client ; FIXME don’t force body to run on the client
-         (binding [grid-row 1
-                   grid-col 1]
-           (dom/div (dom/props {:class "hyperfiddle-gridsheet-wrapper"})
-             (dom/div (dom/props {:class "hyperfiddle-gridsheet"})
-               ~@body)
-             (let [wrapper-height# (new ComputedStyle #(-parse-float (.-height %)) dom/node)]
-               (when-let [node (.querySelector dom/node ".hyperfiddle-gridsheet")]
-                 (let [[rows# columns# width# height# gap# color#] (parse-borders (new ComputedStyle extract-borders node))
-                       [scroll-top# scroll-height# client-height#] (new (ui4/scroll-state< node))
-                       height#                                     (if (zero? scroll-height#) height# scroll-height#)]
-                   (dom/canvas (dom/props {:class  "hf-grid-overlay"
-                                           :width  (str width# "px")
-                                           :height (str wrapper-height# "px")})
-                     (draw-lines! dom/node color# width# wrapper-height# gap# rows# columns#)))))))))))
+       (with-gridsheet-renderer* ~@body))))
 
 (defn grab
   ([ctx k] (or (get ctx k) (get (::hf/parent ctx) k)))
@@ -234,33 +240,41 @@
 (p/defn Render-impl [{::hf/keys [type render Value] :as ctx}]
   (if render
     (p/client (cell grid-row grid-col (p/server (render. ctx))))
-    (case type ::hf/leaf (Simple. ctx) ::hf/keys (Form. ctx)
-      (case (get-cardinality ctx)
-        ::hf/many (Table. ctx)
-        #_else    (let [v (Value.)]
-                    (cond
-                      (vector? v) (Table. ctx)
-                      (map? v)    (Render. (assoc v ::hf/parent ctx))
-                      :else       (throw (ex-info "unreachable" {:v v}))))))))
+    (cond
+      (::hf/popover ctx) (new Popover ctx)
+      :else
+      (case type
+        ::hf/leaf (Simple. ctx)
+        ::hf/keys (Form. ctx)
+        (case (get-cardinality ctx)
+          ::hf/many (Table. ctx)
+          (let [v (Value.)]
+            (cond
+              (vector? v) (Table. ctx)
+              (map? v)    (Render. (assoc v ::hf/parent ctx))
+              :else       (throw (ex-info "unreachable" {:v v})))))))))
 
 (defn height
   ([ctx] (height ctx (::value ctx)))
   ([{::hf/keys [height arguments keys attribute] :as ctx} value]
-   (let [argc (count arguments)]
-     (+ argc
-       (cond
-         (= '_ attribute)                      1
-         ;; user provided, static height
-         (some? height)                        height
-         ;; transposed form (table)
-         (and keys (pos-int? (::count ctx)))   (+ 1 ; table header
-                                                 (max (::count ctx) 1) ; rows
-                                                 (if (pos? argc) 1 0)) ; args pushes table to next row
-         ;; leaf
-         (or (set? value) (sequential? value)) (count value)
-         ;; static form
-         (some? keys)                          (+ 1 (count keys)) ; form labels on next row
-         :else                                 (max (::count ctx) 1))))))
+   (cond
+     (::hf/popover ctx) 1
+     :else
+     (let [argc (count arguments)]
+       (+ argc
+         (cond
+           (= '_ attribute)                      1
+           ;; user provided, static height
+           (some? height)                        height
+           ;; transposed form (table)
+           (and keys (pos-int? (::count ctx)))   (+ 1 ; table header
+                                                   (max (::count ctx) 1) ; rows
+                                                   (if (pos? argc) 1 0)) ; args pushes table to next row
+           ;; leaf
+           (or (set? value) (sequential? value)) (count value)
+           ;; static form
+           (some? keys)                          (+ 1 (count keys)) ; form labels on next row
+           :else                                 (max (::count ctx) 1)))))))
 
 (defn non-breaking-padder [n] (apply str (repeat n " ")) )
 
@@ -401,7 +415,8 @@
 (p/def Form)
 
 (p/defn Form-impl [{::hf/keys [keys values] :as ctx}]
-  (let [values (p/for [ctx values]
+  (let [parent-ctx ctx
+        values (p/for [ctx values]
                  (assoc ctx ::count (new (::hf/count ctx (p/fn [] 0)))))]
     (p/client
       (dom/form
@@ -430,9 +445,10 @@
                                                   (p/server (schema-value-type hf/*schema* hf/db key))))})
                         (dom/text (str (non-breaking-padder indentation) (field-name key))))
                       (into [] cat
-                        [(binding [grid-row    (inc row)
-                                   indentation (inc indentation)]
-                           (p/server (GrayInputs. ctx)))
+                        [(when-not (p/server (::hf/popover ctx))
+                           (binding [grid-row    (inc row)
+                                     indentation (inc indentation)]
+                             (p/server (GrayInputs. ctx))))
                          (binding [grid-row    (cond leaf?       row
                                                      (pos? argc) (+ row (inc argc))
                                                      :else       (inc row))
@@ -440,8 +456,28 @@
                                    indentation (if leaf? indentation (inc indentation))]
                            (p/server
                              (let [ctx (assoc ctx ::dom/for dom-for)]
-                               (Render. (assoc ctx ::dom/for dom-for ::parent-argc argc)))))])
+                               (Render. (assoc ctx ::dom/for dom-for ::parent-argc argc, ::hf/parent parent-ctx)))))])
                       )))))))))))
+
+;; Popover as an HFQL Renderer
+(p/defn Popover-impl [ctx]
+  (let [label (::hf/popover-label ctx "Open")
+        path  (-> (::hf/arguments ctx) first second ::hf/path first) ; arguments looks like [[:needle {::hf/path '[route-segment …]}] …]
+        args  (into [] (p/for-by first [[k ctx] (::hf/arguments ctx)]
+                         [k (new (::hf/read ctx))]))]
+    (p/client
+      (popover/Popover2.
+        label
+        (p/fn [] (p/server (apply spec/explain-fspec-data (first path) (map second args)))) ; validate
+        (p/fn [] (p/server (when-let [Tx (::hf/tx ctx)] (hf/Transact!. (Apply. Tx (map second args)))))) ; transact
+        (p/fn []
+          (with-gridsheet-renderer* ; reentrance
+            (p/server
+              (Render. (assoc (::hf/parent ctx) ::hf/values [(dissoc ctx ::hf/popover)] ; prevent infinite recursion
+                         ))))))))
+  nil)
+
+(p/def Popover)
 
 (p/defn Row [{::hf/keys [keys values] :as ctx}]
   (p/client
