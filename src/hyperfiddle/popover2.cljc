@@ -35,9 +35,10 @@
                          (.focus (.-currentTarget e)))))
     (BranchWrap2. Validate Transact (e/fn [] (Body.)))))
 
-(e/defn Popover2 [label Validate Transact Body]
+(e/defn Popover2 [label Validate Transact anchor-props Body]
   (let [!open? (atom false), open? (e/watch !open?)]
     (dom/div (dom/props {:class "hyperfiddle popover-wrapper"})
+      (when (not-empty anchor-props) (dom/props anchor-props))
       (ui/button (e/fn [] (swap! !open? not)) (dom/text label)) ; popover anchor
       (when open?
         (case (PopoverBody2. Validate Transact Body)
@@ -45,7 +46,7 @@
           nil                (do))
         nil))))
 
-(defmacro popover2*
+(defmacro ^:deprecated popover2*
   ([label body]
    `(popover2* ~label (e/fn []) ~body))
   ([label Transact body]
@@ -53,10 +54,10 @@
   ([label Validate Transact & body]
    `(e/client
       #_(router/router (router/proxy-history router/!history)) ; sever popover state from URL
-      (new Popover2 ~label ~Validate ~Transact (e/fn [] ~@body)))))
+      (new Popover2 ~label ~Validate ~Transact nil (e/fn [] ~@body)))))
 
 ;; TODO Move to own namespace so we can retire popover1
-(defmacro popover2 
+(defmacro ^:deprecated popover2
   ([label HFQL-Expr]
    `(popover2 ~label (e/fn []) ~HFQL-Expr))
   ([label Transact HFQL-Expr]

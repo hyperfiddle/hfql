@@ -470,6 +470,7 @@
         label
         (p/fn [] (p/server (apply spec/explain-fspec-data (first path) (map second args)))) ; validate
         (p/fn [] (p/server (when-let [Tx (::hf/tx ctx)] (hf/Transact!. (Apply. Tx (map second args)))))) ; transact
+        {::dom/style {:grid-row grid-row, :grid-column grid-col}}
         (p/fn []
           (with-gridsheet-renderer* ; reentrance
             (p/server
