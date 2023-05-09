@@ -237,22 +237,21 @@
 (p/defn Simple [ctx] (if (grab ctx ::hf/options) (Options. ctx) (Input. ctx)))
 
 ;; TODO adapt to new HFQL macroexpansion
-(p/defn Render-impl [{::hf/keys [type render Value] :as ctx}]
-  (if render
-    (p/client (cell grid-row grid-col (p/server (render. ctx))))
-    (cond
-      (::hf/popover ctx) (new Popover ctx)
-      :else
-      (case type
-        ::hf/leaf (Simple. ctx)
-        ::hf/keys (Form. ctx)
-        (case (Cardinality. ctx)
-          ::hf/many (Table. ctx)
-          (let [v (Value.)]
-            (cond
-              (vector? v) (Table. ctx)
-              (map? v)    (Render. (assoc v ::hf/parent ctx))
-              :else       (throw (ex-info "unreachable" {:v v})))))))))
+(p/defn Render-impl [{::hf/keys [type render popover Value] :as ctx}]
+  (cond
+    popover (new Popover ctx)
+    render  (p/client (cell grid-row grid-col (p/server (render. ctx))))
+    :else
+    (case type
+      ::hf/leaf (Simple. ctx)
+      ::hf/keys (Form. ctx)
+      (case (Cardinality. ctx)
+        ::hf/many (Table. ctx)
+        (let [v (Value.)]
+          (cond
+            (vector? v) (Table. ctx)
+            (map? v)    (Render. (assoc v ::hf/parent ctx))
+            :else       (throw (ex-info "unreachable" {:v v}))))))))
 
 (defn height
   ([ctx] (height ctx (::value ctx)))
@@ -479,8 +478,11 @@
               (p/fn []
                 (with-gridsheet-renderer* ; reentrance
                   (p/server
-                    (Render. (assoc (::hf/parent ctx) ::hf/values [(dissoc ctx ::hf/popover)] ; prevent infinite recursion
-                               )))))))))))
+                    (cond ; prevent infinite recursion
+                      (::hf/render ctx)               (Render. (dissoc ctx ::hf/popover))
+                      (::hf/values (::hf/parent ctx)) (Render. (assoc (::hf/parent ctx) ::hf/values [(dissoc ctx ::hf/popover)]))
+                      :else                           (throw "Don't know how to render a popover for this context." {:type  (::hf/type ctx)
+                                                                                                                     :?keys (::hf/keys ctx)})))))))))))
   nil)
 
 (p/def Popover)
