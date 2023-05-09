@@ -169,8 +169,8 @@
                    :disabled ~disabled?})
        (dom/props ~dom-props)))
 
-(defmacro get-cardinality [ctx]
-  `(let [ctx# ~ctx] (or (::hf/cardinality ctx#) (schema-cardinality hf/*schema* hf/db (::hf/attribute ctx#)))))
+(p/defn Cardinality [ctx]
+  (or (::hf/cardinality ctx) (schema-cardinality hf/*schema* hf/db (::hf/attribute ctx))))
 
 (p/defn Options [ctx]
   (let [options      (grab ctx ::hf/options)
@@ -182,7 +182,7 @@
         v            (find-best-identity (hfql/JoinAllTheTree. ctx))
         V!           (if tx? (p/fn [v] (tx. ctx v)) Identity)
         OptionLabel  (p/fn [id] (option-label. (hfql/JoinAllTheTree. (continuation. id))))]
-    (case (->picker-type (has-needle? ctx) (= ::hf/many (get-cardinality ctx)))
+    (case (->picker-type (has-needle? ctx) (= ::hf/many (Cardinality. ctx)))
       ::typeahead (ui4/typeahead v V! options OptionLabel (options-props (not tx?) dom-props))
       ::select    (ui4/select v V! options OptionLabel (options-props (not tx?) dom-props))
       ::tag-picker (let [unV! (if-some [untx (grab ctx ::hf/untx)] (p/fn [v] (untx. ctx v)) Identity)]
@@ -211,7 +211,7 @@
       (some? route)
       (p/client (cell grid-row grid-col (router/link route (dom/text label))))
 
-      (= ::hf/many (get-cardinality ctx))
+      (= ::hf/many (Cardinality. ctx))
       (ui4/tag-picker v (when-not readonly? (p/fn [_])) (p/fn [_]) nil option-label
         (input-props readonly? grid-row grid-col dom-for)
         (dom/props {:style {:display "inline-flex"}}))
@@ -246,7 +246,7 @@
       (case type
         ::hf/leaf (Simple. ctx)
         ::hf/keys (Form. ctx)
-        (case (get-cardinality ctx)
+        (case (Cardinality. ctx)
           ::hf/many (Table. ctx)
           (let [v (Value.)]
             (cond
