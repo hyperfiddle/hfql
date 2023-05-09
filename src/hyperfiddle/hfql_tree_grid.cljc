@@ -469,7 +469,7 @@
               args  (into [] (p/for-by first [[k ctx] (::hf/arguments ctx)]
                                [k (new (::hf/read ctx))]))]
           (p/client
-            (popover/Popover2.
+            (popover/Popover.
               label
               {::dom/style {:grid-row grid-row, :grid-column grid-col}}
               (p/fn [] (p/server (apply spec/explain-fspec-data (first path) (map second args)))) ; validate
