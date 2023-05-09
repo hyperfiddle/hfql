@@ -461,21 +461,25 @@
 
 ;; Popover as an HFQL Renderer
 (p/defn Popover-impl [ctx]
-  (let [label (::hf/popover-label ctx "Open")
-        path  (-> (::hf/arguments ctx) first second ::hf/path first) ; arguments looks like [[:needle {::hf/path '[route-segment …]}] …]
-        args  (into [] (p/for-by first [[k ctx] (::hf/arguments ctx)]
-                         [k (new (::hf/read ctx))]))]
-    (p/client
-      (popover/Popover2.
-        label
-        (p/fn [] (p/server (apply spec/explain-fspec-data (first path) (map second args)))) ; validate
-        (p/fn [] (p/server (when-let [Tx (::hf/tx ctx)] (hf/Transact!. (Apply. Tx (map second args)))))) ; transact
-        {::dom/style {:grid-row grid-row, :grid-column grid-col}}
-        (p/fn []
-          (with-gridsheet-renderer* ; reentrance
-            (p/server
-              (Render. (assoc (::hf/parent ctx) ::hf/values [(dissoc ctx ::hf/popover)] ; prevent infinite recursion
-                         ))))))))
+  (p/client
+    (router/router (router/proxy-history router/!history)
+      (p/server
+        (let [label (::hf/popover-label ctx "Open")
+              path  (-> (::hf/arguments ctx) first second ::hf/path first) ; arguments looks like [[:needle {::hf/path '[route-segment …]}] …]
+              args  (into [] (p/for-by first [[k ctx] (::hf/arguments ctx)]
+                               [k (new (::hf/read ctx))]))]
+          (p/client
+            (popover/Popover2.
+              label
+              {::dom/style {:grid-row grid-row, :grid-column grid-col}}
+              (p/fn [] (p/server (apply spec/explain-fspec-data (first path) (map second args)))) ; validate
+              (p/fn [] (p/server (when-let [Tx (::hf/tx ctx)] (hf/Transact!. (Apply. Tx (map second args)))))) ; transact
+              (p/fn [] (router/swap-route! empty)) ; discard
+              (p/fn []
+                (with-gridsheet-renderer* ; reentrance
+                  (p/server
+                    (Render. (assoc (::hf/parent ctx) ::hf/values [(dissoc ctx ::hf/popover)] ; prevent infinite recursion
+                               )))))))))))
   nil)
 
 (p/def Popover)

@@ -7,8 +7,7 @@
             [hyperfiddle.electric-dom2 :as dom]
             [hyperfiddle.electric-ui4 :as ui]
             [missionary.core :as m]
-            [hyperfiddle.spec :as spec]
-            [hyperfiddle.history :as router]))
+            [hyperfiddle.spec :as spec]))
 
 (e/defn BranchWrap2 [Validate Transact Body-client] ; todo colorless p/fns
   (binding [hf/validation-hints (spec/reformat-explain-data (Validate.))]
@@ -21,8 +20,7 @@
             (when hf/validation-hints
               (dom/props {::dom/disabled true}))
             (dom/text "commit!"))
-          (ui/button (e/fn []
-                       (return :discard)) (dom/text "discard"))
+          (ui/button (e/fn [] (return :discard)) (dom/text "discard"))
           ;; TODO simplify this gymnastic
           (try (new (e/task->cp return)) ; Entrypoint treats pending as loading state which this is not
                (catch Pending _ nil)))))))
@@ -35,14 +33,15 @@
                          (.focus (.-currentTarget e)))))
     (BranchWrap2. Validate Transact (e/fn [] (Body.)))))
 
-(e/defn Popover2 [label Validate Transact anchor-props Body]
+(e/defn Popover2 [label anchor-props Validate Transact OnDiscard Body]
   (let [!open? (atom false), open? (e/watch !open?)]
     (dom/div (dom/props {:class "hyperfiddle popover-wrapper"})
       (when (not-empty anchor-props) (dom/props anchor-props))
       (ui/button (e/fn [] (swap! !open? not)) (dom/text label)) ; popover anchor
       (when open?
         (case (PopoverBody2. Validate Transact Body)
-          (:commit :discard) (swap! !open? not)
+          (:commit :discard) (case (OnDiscard.) ; sequence
+                               (swap! !open? not))
           nil                (do))
         nil))))
 
@@ -53,8 +52,7 @@
    `(popover2* ~label (e/fn []) ~Transact ~body))
   ([label Validate Transact & body]
    `(e/client
-      #_(router/router (router/proxy-history router/!history)) ; sever popover state from URL
-      (new Popover2 ~label ~Validate ~Transact nil (e/fn [] ~@body)))))
+      (new Popover2 ~label nil ~Validate ~Transact (e/fn []) (e/fn [] ~@body)))))
 
 ;; TODO Move to own namespace so we can retire popover1
 (defmacro ^:deprecated popover2
