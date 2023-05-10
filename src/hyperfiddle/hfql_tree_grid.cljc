@@ -458,31 +458,79 @@
                                (Render. (assoc ctx ::dom/for dom-for ::parent-argc argc, ::hf/parent parent-ctx)))))])
                       )))))))))))
 
+(defn closest-function-call-in-path [path]
+  (->> (reverse path) (filter seq?) (first)))
+
+(tests
+  (closest-function-call-in-path '[admin (change-email admin .) :email]) := '(change-email admin .)
+  (closest-function-call-in-path '[(foo) (change-email admin .) :email]) := '(change-email admin .)
+  (closest-function-call-in-path '[(change-email admin .) (foo)]) := '(foo)
+  (closest-function-call-in-path '[(change-email admin .)]) := '(change-email admin .)
+)
+
+(defn select-context [ctx keys]
+  (assert (= ::hf/keys (::hf/type ctx)))
+  (let [keys          (set keys)
+        indexes       (into {} (map-indexed (fn [idx k] [k idx]) (::hf/keys ctx)))
+        filtered-keys (into [] (filter keys) (::hf/keys ctx))
+        keep-indexes  (set (vals (select-keys indexes keys)))
+        filtered-vals (->> (map-indexed vector (::hf/values ctx))
+                        (filter (fn [[idx value]]
+                                  (keep-indexes idx)))
+                        (mapv second))]
+    (assoc ctx ::hf/keys filtered-keys, ::hf/values filtered-vals)))
+
+(tests
+  (select-context {::hf/type ::hf/keys
+                   ::hf/keys ["ka" "kb" "kc"]
+                   ::hf/values ["va" "vb" "vc"]}
+    ["ka" "kc"])
+  := {::hf/type ::hf/keys
+      ::hf/keys ["ka" "kc"]
+      ::hf/values ["va" "vc"]})
+
 ;; Popover as an HFQL Renderer
 (p/defn Popover-impl [ctx]
   (p/client
     (router/router (router/proxy-history router/!history) ; scoped popover state
       (p/server
-        (let [label (::hf/popover-label ctx "Open")
-              path  (-> (::hf/arguments ctx) first second ::hf/path first) ; arguments looks like [[:needle {::hf/path '[route-segment …]}] …]
-              args  (into [] (p/for-by first [[k ctx] (::hf/arguments ctx)]
-                               [k (new (::hf/read ctx))]))]
+        (let [path          (-> (::hf/arguments ctx) first second ::hf/path) ; arguments looks like [[:needle {::hf/path '[route-segment …]}] …]
+              args          (into [] (p/for-by first [[k ctx] (::hf/arguments ctx)]
+                                       [k (new (::hf/read ctx))]))
+              function-call (closest-function-call-in-path path)
+              Validate      (p/fn [] (when function-call (apply spec/explain-fspec-data (first function-call) (map second args))))
+              Transact      (p/fn [] (when-let [Tx (::hf/tx ctx)] (hf/Transact!. (Apply. Tx (map second args)))))
+              Render        (p/fn [ctx] (hfql/Render. (-> (::hf/parent ctx)
+                                                        (select-context #{function-call})
+                                                        (assoc ::hf/values [(dissoc ctx ::hf/popover)]) ; prevent infinite recursion
+                                                        )))]
           (p/client
             (popover/Popover.
-              label
+              (p/server (::hf/popover-label ctx "Open"))
               {::dom/style {:grid-row grid-row, :grid-column grid-col}}
-              (p/fn [] (p/server (when-let [f (first path)]
-                                   (apply spec/explain-fspec-data f (map second args))))) ; validate
-              (p/fn [] (p/server (when-let [Tx (::hf/tx ctx)] (hf/Transact!. (Apply. Tx (map second args)))))) ; transact
+              (p/fn [] (p/server (Validate.)))
+              (p/fn [] (p/server (Transact.)))
               (p/fn [] (router/swap-route! empty)) ; discard
               (p/fn []
                 (with-gridsheet-renderer* ; reentrance
                   (p/server
-                    (cond ; prevent infinite recursion
-                      (::hf/render ctx)               (Render. (dissoc ctx ::hf/popover))
-                      (::hf/values (::hf/parent ctx)) (Render. (assoc (::hf/parent ctx) ::hf/values [(dissoc ctx ::hf/popover)]))
-                      :else                           (throw "Don't know how to render a popover for this context." {:type  (::hf/type ctx)
-                                                                                                                     :?keys (::hf/keys ctx)})))))))))))
+                    (cond
+                      (::hf/render ctx)
+                      (p/client (cell grid-row grid-col
+                                  (p/server ; intercept hfql/Render for progressive enhancement
+                                    (binding [hfql/Render (p/fn [ctx]
+                                                            (binding [hfql/Render Render-impl]
+                                                              (with-gridsheet-renderer*
+                                                                (p/server (Render. ctx)))))]
+                                      (new (::hf/render ctx) ctx)))))
+
+                      (= ::hf/keys (::hf/type (::hf/parent ctx)))
+                      (Render. ctx)
+
+                      :else
+                      (throw "Don't know how to render a popover for this context."
+                        {:type  (::hf/type ctx)
+                         :?keys (::hf/keys ctx)})))))))))))
   nil)
 
 (p/def Popover)
