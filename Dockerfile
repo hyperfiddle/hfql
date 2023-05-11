@@ -16,7 +16,7 @@ COPY src src
 COPY src-docs src-docs
 COPY resources resources
 ARG VERSION
-RUN clojure -M:build compile demo --config-merge "{:closure-defines {hyperfiddle.electric-client/VERSION \"$VERSION\"}}"
+RUN clojure -M:build release demo --config-merge "{:closure-defines {hyperfiddle.electric-client/VERSION \"$VERSION\"}}"
 
 ENTRYPOINT ["/usr/bin/tini", "--"] # will get PID 1 and handle SIGINT and SIGTERM
 ENV VERSION=$VERSION
