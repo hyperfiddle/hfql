@@ -14,9 +14,9 @@
 
 (e/defn Main []
   (binding [history/encode route->path
-            history/decode #(or (path->route %) [`user.demo-two-clocks/TwoClocks])]
+            history/decode #(or (path->route %) [`user.teeshirt-orders/Webview-HFQL])]
     (history/router (history/HTML5-History.)
-      (set! (.-title js/document) (str #_(clojure.string/capitalize) (some-> (identity history/route) first name) " – HFQL"))
+      (set! (.-title js/document) (some-> (identity history/route) first name))
       (binding [dom/node js/document.body]
         (history/router 1 ; focus on first slot
           (Webview-HFQL.))))))
