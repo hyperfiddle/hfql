@@ -81,3 +81,17 @@ jobs:
 
     - name: Run tests
       run: ./node_modules/.bin/karma start --single-run
+
+  deploy:
+    name: Deploy to Fly.io
+    needs: [jvm, browser]
+    if: success()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - run: NO_COLOR=1 flyctl deploy --build-arg VERSION=$(git describe --tags --long --always --dirty) --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

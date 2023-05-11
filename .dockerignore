@@ -1,0 +1,10 @@
+# flyctl launch added from .gitignore
+**/.clj-kondo
+**/.cpcache
+**/.nrepl-port
+.shadow-cljs
+node_modules
+out
+yarn.lock
+resources/public/hyperfiddle/hfql/js
+fly.toml

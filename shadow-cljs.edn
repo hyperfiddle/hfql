@@ -1,3 +1,11 @@
 {:builds {:browser-test {:target    :karma
                          :output-to "out/karma-tests.js"
-                         :ns-regexp "-tests$"}}}
+                         :ns-regexp "-tests$"}
+          :demo {:target :browser
+                 :devtools {:watch-dir "resources/public" ; live reload CSS
+                            :hud #{:errors :progress}
+                            :ignore-warnings true} ; warnings don't prevent hot-reload
+                 :output-dir "resources/public/hyperfiddle/hfql/js"
+                 :asset-path "/hyperfiddle/hfql/js"
+                 :module-hash-names true
+                 :modules {:main {:entries [user] :init-fn user/start!}}}}}
