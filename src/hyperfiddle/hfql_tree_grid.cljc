@@ -264,7 +264,7 @@
          (cond
            (= '_ attribute)                      1
            ;; user provided, static height
-           (some? height)                        height
+           (some? height)                        (+ height argc)
            ;; transposed form (table)
            (and keys (pos-int? (::count ctx)))   (+ 1 ; table header
                                                    (max (::count ctx) 1) ; rows
