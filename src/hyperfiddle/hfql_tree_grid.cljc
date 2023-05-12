@@ -254,8 +254,8 @@
             :else       (throw (ex-info "unreachable" {:v v}))))))))
 
 (defn height
-  ([ctx] (height ctx (::value ctx)))
-  ([{::hf/keys [height arguments keys attribute] :as ctx} value]
+  ([default-height ctx] (height default-height ctx (::value ctx)))
+  ([default-height {::hf/keys [height arguments keys attribute] :as ctx} value]
    (cond
      (::hf/popover ctx) 1
      :else
@@ -417,14 +417,14 @@
 (p/defn Form-impl [{::hf/keys [keys values] :as ctx}]
   (let [parent-ctx ctx
         values (p/for [ctx values]
-                 (assoc ctx ::count (new (::hf/count ctx (p/fn [] 0)))))]
+                 (assoc ctx ::count (min default-height (new (::hf/count ctx (p/fn [] 0))))))]
     (p/client
       (dom/form
         (dom/on! "submit" (fn [e] (.preventDefault e))) ; an HFQL form is semantic only, it is never submitted
         (dom/props {::dom/role  "form"
                      ::dom/style {:border-left-color (c/color hf/db-name)}})
         (p/server
-          (let [heights (vec (reductions + 0 (map height values)))]
+          (let [heights (vec (reductions + 0 (map (partial height default-height) values)))]
             (into [] cat
               (p/for-by (comp first second) [[idx [key ctx]] (map-indexed vector (partition 2 (interleave keys values)))]
                 (let [leaf? (= ::hf/leaf (::hf/type ctx))
@@ -564,7 +564,7 @@
 
 (p/def Table)
 (p/defn Table-impl [{::hf/keys [keys height Value] :as ctx}]
-  (let [actual-height (new (::hf/count ctx (p/fn [] 0)))
+  (let [actual-height (min default-height (new (::hf/count ctx (p/fn [] 0))))
         height        (clamp 1 (or height default-height) actual-height)
         list?         (::list? ctx)
         nested?       (and (some? (::dom/for ctx)) (not list?))
