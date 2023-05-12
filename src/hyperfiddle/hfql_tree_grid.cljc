@@ -279,7 +279,8 @@
 
 (defn field-name [attr]
   (if (seq? attr)
-    (cons (symbol (field-name (first attr))) (seq (::spec/keys (clojure.datafy/datafy (spec/args (first attr))))) )
+    #_(cons (symbol (field-name (first attr))) #_(seq (::spec/keys (clojure.datafy/datafy (spec/args (first attr))))))
+    (symbol (field-name (first attr))) ; only print fn name, not args
     (name attr)))
 
 (defmacro gray-input-props [id props list-id options name readonly]
