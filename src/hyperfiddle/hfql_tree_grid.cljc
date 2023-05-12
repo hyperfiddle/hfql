@@ -259,21 +259,24 @@
    (cond
      (::hf/popover ctx) 1
      :else
-     (let [argc (count arguments)]
+     (let [argc         (count arguments)
+           height       (or height default-height)
+           actual-count (min (::count ctx) height)]
        (+ argc
          (cond
            (= '_ attribute)                      1
            ;; user provided, static height
-           (some? height)                        (+ height argc)
+           (some? (::hf/height ctx))             (+ height argc)
            ;; transposed form (table)
            (and keys (pos-int? (::count ctx)))   (+ 1 ; table header
-                                                   (max (::count ctx) 1) ; rows
+                                                   (if (> (::count ctx) height) 1 0) ; pagination
+                                                   (max actual-count 1) ; rows
                                                    (if (pos? argc) 1 0)) ; args pushes table to next row
            ;; leaf
            (or (set? value) (sequential? value)) (count value)
            ;; static form
            (some? keys)                          (+ 1 (count keys)) ; form labels on next row
-           :else                                 (max (::count ctx) 1)))))))
+           :else                                 (max actual-count 1)))))))
 
 (defn non-breaking-padder [n] (apply str (repeat n " ")) )
 
@@ -417,7 +420,7 @@
 (p/defn Form-impl [{::hf/keys [keys values] :as ctx}]
   (let [parent-ctx ctx
         values (p/for [ctx values]
-                 (assoc ctx ::count (min default-height (new (::hf/count ctx (p/fn [] 0))))))]
+                 (assoc ctx ::count (new (::hf/count ctx (p/fn [] 0)))))]
     (p/client
       (dom/form
         (dom/on! "submit" (fn [e] (.preventDefault e))) ; an HFQL form is semantic only, it is never submitted
@@ -564,15 +567,19 @@
 
 (p/def Table)
 (p/defn Table-impl [{::hf/keys [keys height Value] :as ctx}]
-  (let [actual-height (min default-height (new (::hf/count ctx (p/fn [] 0))))
+  (let [actual-count  (new (::hf/count ctx (p/fn [] 0)))
+        actual-height (min default-height actual-count)
         height        (clamp 1 (or height default-height) actual-height)
         list?         (::list? ctx)
         nested?       (and (some? (::dom/for ctx)) (not list?))
-        shifted?      (or list? (and (::parent-argc ctx) (zero? (::parent-argc ctx))))]
-    (p/client
-      (binding [grid-col (if nested? (inc grid-col) grid-col)
-                grid-row (if (or shifted? list?) (dec grid-row) grid-row)]
-        (paginated-grid (count keys) height actual-height
+        shifted?      (or list? (and (::parent-argc ctx) (zero? (::parent-argc ctx))))
+        !pagination-offset (atom 0)]
+    (binding [hf/page-drop (p/watch !pagination-offset)
+              hf/page-take height]
+      (p/client
+        (binding [grid-col (if nested? (inc grid-col) grid-col)
+                  grid-row (if (or shifted? list?) (dec grid-row) grid-row)]
+          #_(stepped-scroll (count keys) height actual-height)
           (dom/table
             (dom/props {::dom/role "table"})
             (when-not list?
@@ -592,10 +599,30 @@
                       (dom/text (field-name col)))))))
             (dom/tbody
               (p/server
-                (let [value (give-card-n-contexts-a-unique-key hf/page-drop (Value.))]
-                  (p/for-by (comp ::key second) [[idx ctx] (map-indexed vector value)]
-                    (p/client (binding [grid-row (+ grid-row idx 1)]
-                                (p/server (Row. ctx))))))))))))))
+                (let [value (give-card-n-contexts-a-unique-key hf/page-drop (Value.))
+                      result
+                      (p/for-by (comp ::key second) [[idx ctx] (map-indexed vector value)]
+                        (p/client (binding [grid-row (+ grid-row idx 1)]
+                                    (p/server (Row. ctx)))))]
+                  (p/client
+                    (when (> actual-count height)
+                      (p/client
+                        (dom/tr
+                          (dom/td
+                            (dom/div (dom/props {::dom/role "cell",
+                                                 ::dom/style {:grid-row (+ grid-row (inc height))
+                                                              :grid-column grid-col}})
+                              (dom/div (dom/props {::dom/style {:display :grid
+                                                                :grid-template-columns "auto 1fr auto"
+                                                                :place-items "center"}})
+                                (ui4/button (p/fn [] (p/server (swap! !pagination-offset #(max 0 (- %1 %2)) (p/server hf/page-take))))
+                                  (dom/props {::dom/disabled (p/server (= 0 hf/page-drop))})
+                                  (dom/text "<"))
+                                (dom/span (dom/text (p/server hf/page-drop) ".." (p/server (+ hf/page-drop hf/page-take)) " / " (p/server actual-count)))
+                                (ui4/button (p/fn [] (p/server (swap! !pagination-offset #(min (+ %1 %2) %3) (p/server hf/page-take) actual-count)))
+                                  (dom/props {::dom/disabled (p/server (>= (+ hf/page-drop hf/page-take) actual-count))})
+                                  (dom/text ">")))))))))
+                  result)))))))))
 
 (defn compute-offset [scroll-top row-height]
   #?(:cljs (max 0 (js/Math.ceil (/ (js/Math.floor scroll-top) row-height)))))
@@ -611,7 +638,7 @@
          (js/parseFloat (first (re-find #"[0-9]+(\.[0-9]+)?" str)))
          float))))
 
-(defmacro paginated-grid [actual-width max-height actual-height & body]
+(defmacro stepped-scroll [actual-width max-height actual-height & body]
   `(let [row-height#    (parse-row-height (ComputedStyle. #(.-gridAutoRows %)
                                             (.closest dom/node ".hyperfiddle-gridsheet")))
          actual-height# (* row-height# ~actual-height)
