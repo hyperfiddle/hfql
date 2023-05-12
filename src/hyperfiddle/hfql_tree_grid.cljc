@@ -330,7 +330,7 @@
             (dom/props {::dom/role  "cell"
                         ::dom/class "label"
                         ::dom/for   id,
-                        ::dom/title (pr-str (:hyperfiddle.spec/form arg-spec))
+                        ::dom/title (str/join " - " (filter some? [(field-name name) (some-> (:hyperfiddle.spec/form arg-spec) pr-str)]))
                         ::dom/style {:grid-row    grid-row
                                      :grid-column grid-col
                                      :color       :gray}})
@@ -440,8 +440,10 @@
                            ::dom/style {:grid-row         row
                                          :grid-column      grid-col
                                          #_#_:padding-left (str indentation "rem")}
-                           ::dom/title (pr-str (or (spec-description false (attr-spec key))
-                                                  (p/server (schema-value-type hf/*schema* hf/db key))))})
+                           ::dom/title (str/join " - " (filter some? [(field-name key)
+                                                                      (some-> (or (spec-description false (attr-spec key))
+                                                                                (p/server (schema-value-type hf/*schema* hf/db key)))
+                                                                        pr-str)]))})
                         (dom/text (str (non-breaking-padder indentation) (field-name key))))
                       (into [] cat
                         [(when-not (p/server (::hf/popover ctx))

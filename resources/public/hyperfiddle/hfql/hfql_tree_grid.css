@@ -118,6 +118,8 @@ body.hyperfiddle{
 .hyperfiddle .hyperfiddle-gridsheet .label[role="cell"] {
     font-weight: 500;
     background-color: var(--hf-label-background);
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* Edge case: checkboxes should not grow to fill the row height  */
