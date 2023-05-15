@@ -266,7 +266,10 @@
          (cond
            (= '_ attribute)                      1
            ;; user provided, static height
-           (some? (::hf/height ctx))             (+ height argc)
+           (some? (::hf/height ctx))             (+ height ; user-specified height
+                                                   argc ; gray args
+                                                   (if (> (::count ctx) height) 1 0) ; pagination buttons
+                                                   )
            ;; transposed form (table)
            (and keys (pos-int? (::count ctx)))   (+ 1 ; table header
                                                    (if (> (::count ctx) height) 1 0) ; pagination
@@ -568,7 +571,7 @@
 (p/def Table)
 (p/defn Table-impl [{::hf/keys [keys height Value] :as ctx}]
   (let [actual-count  (new (::hf/count ctx (p/fn [] 0)))
-        actual-height (min default-height actual-count)
+        actual-height (min (or height default-height) actual-count)
         height        (clamp 1 (or height default-height) actual-height)
         list?         (::list? ctx)
         nested?       (and (some? (::dom/for ctx)) (not list?))
