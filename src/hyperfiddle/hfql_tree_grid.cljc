@@ -2,6 +2,7 @@
   (:require [hyperfiddle.electric :as p]
             [hyperfiddle.api :as hf]
             [hyperfiddle.hfql :as hfql]
+            #?(:clj [hyperfiddle.txn :as txn])
             [hyperfiddle.popover2 :as popover]
             [hyperfiddle.electric-dom2 :as dom]
             [hyperfiddle.electric-svg :as svg]
@@ -172,6 +173,10 @@
 (p/defn Cardinality [ctx]
   (or (::hf/cardinality ctx) (schema-cardinality hf/*schema* hf/db (::hf/attribute ctx))))
 
+#?(:clj
+   (defn staged-statement? [schema stage e a]
+     (some? (seq (txn/filter-tx schema (fn [[_op e' a']] (and (= e e') (= a a'))) stage)))))
+
 (p/defn Options [ctx]
   (let [options      (grab ctx ::hf/options)
         option-label (grab ctx ::hf/option-label Identity)
@@ -186,7 +191,10 @@
       ::typeahead (ui4/typeahead v V! options OptionLabel (options-props (not tx?) dom-props))
       ::select    (ui4/select v V! options OptionLabel (options-props (not tx?) dom-props))
       ::tag-picker (let [unV! (if-some [untx (grab ctx ::hf/untx)] (p/fn [v] (untx. ctx v)) Identity)]
-                     (ui4/tag-picker v V! unV! options OptionLabel (options-props (not tx?) dom-props))))))
+                     (ui4/tag-picker v V! unV! options OptionLabel
+                       (dom/props {::dom/class [(when (p/server (staged-statement? hf/schema hf/stage (::hf/entity ctx) (::hf/attribute ctx)))
+                                                  "hyperfiddle-input-dirty-staged")]})
+                       (options-props (not tx?) dom-props))))))
 
 (defmacro input-props [readonly? grid-row grid-col dom-for]
   `(do
@@ -261,20 +269,20 @@
      :else
      (let [argc         (count arguments)
            height       (or height default-height)
-           actual-count (min (::count ctx) height)]
+           actual-count (min (::count ctx) height)
+           pagination-offset (if (> (::count ctx) height) 1 0)]
        (+ argc
          (cond
            (= '_ attribute)                      1
            ;; user provided, static height
            (some? (::hf/height ctx))             (+ height ; user-specified height
                                                    argc ; gray args
-                                                   (if (> (::count ctx) height) 1 0) ; pagination buttons
-                                                   )
+                                                   pagination-offset)
            ;; transposed form (table)
            (and keys (pos-int? (::count ctx)))   (+ 1 ; table header
-                                                   (if (> (::count ctx) height) 1 0) ; pagination
                                                    (max actual-count 1) ; rows
-                                                   (if (pos? argc) 1 0)) ; args pushes table to next row
+                                                   (if (pos? argc) 1 0) ; args pushes table to next row
+                                                   pagination-offset)
            ;; leaf
            (or (set? value) (sequential? value)) (count value)
            ;; static form
@@ -498,6 +506,10 @@
       ::hf/keys ["ka" "kc"]
       ::hf/values ["va" "vc"]})
 
+#?(:clj (defn staged-command? [schema stage tx]
+          (seq (let [includes-tx? (into #{} tx)]
+                 (txn/filter-tx schema includes-tx? stage)))))
+
 ;; Popover as an HFQL Renderer
 (p/defn Popover-impl [ctx]
   (p/client
@@ -508,7 +520,8 @@
                                        [k (new (::hf/read ctx))]))
               function-call (closest-function-call-in-path path)
               Validate      (p/fn [] (when function-call (apply spec/explain-fspec-data (first function-call) (map second args))))
-              Transact      (p/fn [] (when-let [Tx (::hf/tx ctx)] (hf/Transact!. (Apply. Tx (map second args)))))
+              !staged       (atom nil)
+              Transact      (p/fn [] (when-let [Tx (::hf/tx ctx)] (hf/Transact!. (reset! !staged (Apply. Tx (map second args))))))
               Render        (p/fn [ctx] (hfql/Render. (-> (::hf/parent ctx)
                                                         (select-context #{function-call})
                                                         (assoc ::hf/values [(dissoc ctx ::hf/popover)]) ; prevent infinite recursion
@@ -516,7 +529,9 @@
           (p/client
             (popover/Popover.
               (p/server (::hf/popover-label ctx "Open"))
-              {::dom/style {:grid-row grid-row, :grid-column grid-col}}
+              {::dom/style {:grid-row grid-row, :grid-column grid-col}
+               ::dom/class [(when (p/server (staged-command? hf/schema hf/stage (p/watch !staged)))
+                              "hyperfiddle-input-dirty-staged")]}
               (p/fn [] (p/server (Validate.)))
               (p/fn [] (p/server (Transact.)))
               (p/fn [] (router/swap-route! empty)) ; discard

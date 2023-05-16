@@ -5,7 +5,7 @@
                                      :git/sha "2d1ef6fac0c980d79a3ebf39c31a7c0226391211"}
            datascript/datascript    {:mvn/version "1.3.14"}
            com.hyperfiddle/electric {:git/url "https://github.com/hyperfiddle/electric.git"
-                                     :git/sha "067406a08043947fc4e9b6eef442751fbdf18588"}}
+                                     :git/sha "b61ce156cc68451eed87fb99d06566226911a2a8"}}
  :aliases {:dev       {:extra-paths ["test"]
                        :extra-deps  {thheller/shadow-cljs {:mvn/version "2.22.10"}}}
            :test-jvm  {:extra-paths ["test"]
