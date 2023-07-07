@@ -16,3 +16,7 @@ npm install
 clj -M:test-cljs complie :browser-test --force-spawn
 ./node_modules/.bin/karma start --single run
 ```
+
+# How to run
+* `clojure -M:build compile demo` or `clojure -M:build watch demo`
+* `clj -A:demo:dev -X user/-main`
