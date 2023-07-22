@@ -202,7 +202,7 @@
                     (case spec
                       (:db/id :db/ident) [{:db/id (:db/id f), :node/cardinality ::hf/one}]
                       (when (symbol? spec)
-                        (throw (ex-info "Unknown cardinality, please define a spec." {:missing spec})))))))))
+                        (throw (ex-info (str "Unknown cardinality, please define a spec for: " spec) {:missing spec})))))))))
        (d/db-with db)))
 
 (defn resolve-arguments-spec-pass "For each function argument, infer argument spec info."
