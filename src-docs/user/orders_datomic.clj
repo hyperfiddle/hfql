@@ -1,6 +1,7 @@
 (ns user.orders-datomic
   "query functions used in tee-shirt orders demo"
-  (:require [clojure.spec.alpha :as s]
+  (:require [clojure.tools.logging :as log]
+            [clojure.spec.alpha :as s]
             contrib.str
             [hyperfiddle.api :as hf]
             [hyperfiddle.rcf :refer [tap % tests]]))
@@ -119,7 +120,7 @@
 
 
 (defn nav! [db e a] (let [v (get (d/entity db e) a)]
-                      (prn "nav! datiomic - " e a v)
+                      (log/trace "nav! datiomic - " e a v)
                       v) )
 
 (defn schema [db a] (when (qualified-keyword? a) (d/entity db a)))
