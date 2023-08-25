@@ -1,13 +1,14 @@
 {:paths   ["src" "resources"]
- :deps    {org.clojure/clojure      {:mvn/version "1.11.1"}
-           missionary/missionary    {:mvn/version "b.28"}
+ :deps    {org.clojure/clojure      {:mvn/version "1.12.0-alpha4"}
+           missionary/missionary    {:mvn/version "b.31"}
            com.hyperfiddle/rcf      {:git/url "https://github.com/hyperfiddle/rcf.git"
                                      :git/sha "2d1ef6fac0c980d79a3ebf39c31a7c0226391211"}
            datascript/datascript    {:mvn/version "1.3.14"}
            com.datomic/peer {:mvn/version "1.0.6735"}
-           com.hyperfiddle/electric {:mvn/version "v2-alpha-422-g96e5c0a5"}}
+           com.hyperfiddle/electric {:mvn/version "v2-alpha-428-g22937f75"}}
+ 
  :aliases {:dev       {:extra-paths ["test"]
-                       :extra-deps  {thheller/shadow-cljs {:mvn/version "2.22.10"}}}
+                       :extra-deps  {thheller/shadow-cljs {:mvn/version "2.25.2"}}}
            :test-jvm  {:extra-paths ["test"]
                        :extra-deps  {io.github.cognitect-labs/test-runner {:git/url "https://github.com/cognitect-labs/test-runner.git"
                                                                            :sha     "cc75980b43011773162b485f46f939dc5fba91e4"}}
@@ -16,7 +17,7 @@
                        :exec-fn     cognitect.test-runner.api/test
                        :exec-args   {:patterns ["hyperfiddle.hfql-tests"]}}
            :test-cljs {:extra-paths ["test"]
-                       :extra-deps  {thheller/shadow-cljs {:mvn/version "2.22.10"}}
+                       :extra-deps  {thheller/shadow-cljs {:mvn/version "2.25.2"}}
                        :jvm-opts    ["-Dhyperfiddle.rcf.generate-tests=true" "-Xss2m"]
                        :main-opts   ["-m" "shadow.cljs.devtools.cli"]}
            :build {:extra-paths ["src-docs"]
