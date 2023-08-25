@@ -19,17 +19,4 @@
            :test-cljs {:extra-paths ["test"]
                        :extra-deps  {thheller/shadow-cljs {:mvn/version "2.25.2"}}
                        :jvm-opts    ["-Dhyperfiddle.rcf.generate-tests=true" "-Xss2m"]
-                       :main-opts   ["-m" "shadow.cljs.devtools.cli"]}
-           :build {:extra-paths ["src-docs"]
-                   :main-opts   ["-m" "shadow.cljs.devtools.cli"]
-                   :jvm-opts    ["-Xss2m"]
-                   :extra-deps  {thheller/shadow-cljs {:mvn/version "2.22.10"}}}
-           :demo {:extra-paths ["src-docs"]
-                  :extra-deps {info.sunng/ring-jetty9-adapter
-                               {;:mvn/version "0.14.3" ; (Jetty 9) is Java 8 compatible;
-                                :mvn/version "0.17.7" ; (Jetty 10) is NOT Java 8 compatible
-                                :exclusions  [org.slf4j/slf4j-api info.sunng/ring-jetty9-adapter-http3]}
-                               ring-basic-authentication/ring-basic-authentication {:mvn/version "1.1.1"}
-                               org.clojure/tools.logging {:mvn/version "1.2.4"}
-                               ch.qos.logback/logback-classic {:mvn/version "1.2.11"}}
-                  :exec-fn user/main}}}
+                       :main-opts   ["-m" "shadow.cljs.devtools.cli"]}}}
