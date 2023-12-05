@@ -26,24 +26,26 @@
                (catch Pending _ nil)))))))
 
 (e/defn PopoverBody2 [Validate Transact Body]
-  (dom/div (dom/props {:class    "hyperfiddle popover-body"
-                       :tabIndex "1"})
-    (dom/on! "click" (fn [e]
-                       (when (= (.-target e) (.-currentTarget e)) ; click on self
-                         (.focus (.-currentTarget e)))))
-    (BranchWrap2. Validate Transact (e/fn [] (Body.)))))
+  (e/client
+    (dom/div (dom/props {:class    "hyperfiddle popover-body"
+                         :tabIndex "1"})
+      (dom/on! "click" (fn [e]
+                         (when (= (.-target e) (.-currentTarget e)) ; click on self
+                           (.focus (.-currentTarget e)))))
+      (BranchWrap2. Validate Transact (e/fn [] (Body.))))))
 
 (e/defn Popover [label anchor-props Validate Transact OnDiscard Body]
-  (let [!open? (atom false), open? (e/watch !open?)]
-    (dom/div (dom/props {:class "hyperfiddle popover-wrapper"})
-      (when (not-empty anchor-props) (dom/props anchor-props))
-      (ui/button (e/fn [] (swap! !open? not)) (dom/text label)) ; popover anchor
-      (when open?
-        (case (PopoverBody2. Validate Transact Body)
-          (:commit :discard) (case (OnDiscard.) ; sequence
-                               (swap! !open? not))
-          nil                (do))
-        nil))))
+  (e/client
+    (let [!open? (atom false), open? (e/watch !open?)]
+      (dom/div (dom/props {:class "hyperfiddle popover-wrapper"})
+        (when (not-empty anchor-props) (dom/props anchor-props))
+        (ui/button (e/fn [] (swap! !open? not)) (dom/text label)) ; popover anchor
+        (when open?
+          (case (PopoverBody2. Validate Transact Body)
+            (:commit :discard) (case (OnDiscard.) ; sequence
+                                 (swap! !open? not))
+            nil                (do))
+          nil)))))
 
 (defmacro ^:deprecated popover2*
   ([label body]

@@ -18,21 +18,26 @@
   ([bindings query] `(new Render (precompile ~bindings ~query)))
   ([bindings query eid] `(new Render (precompile ~bindings ~query ~eid))))
 
-(p/defn JoinArg [ctx-or-V]
-  (if (map? ctx-or-V)
-    (JoinAllTheTree. ctx-or-V)
-    (new ctx-or-V)))
-
-(defn literal [collf & args] (collf args))    ; TODO rename
-
-(s/fdef literal :args (s/cat :collf fn? :args any?) :ret any?)
-
-
-(p/def Rec)
-
 (defn -drop-wildcards "Given a context, build a sequence of key-value pairs, ignoring any wildcard"
   [{:hyperfiddle.api/keys [keys values]}]
   (remove (fn [[k _v]] (= '_ k)) (partition 2 (interleave keys values))))
+
+(p/def Rec)
+
+;; TODO Rename, this seems to just be "Render"
+(p/defn EdnRender "Join all the tree, calling renderers when provided, return EDN" [V]
+  (binding [Rec (p/fn [{:hyperfiddle.api/keys [type render Value] :as ctx}]
+                  (if render (render. ctx)
+                      (case type
+                        :hyperfiddle.api/leaf (Value.)
+                        :hyperfiddle.api/keys (into {} (p/for [[k ctx] (-drop-wildcards ctx)]
+                                                         [k (Rec. ctx)]))
+                        (let [ctx (Value.)]
+                          (cond
+                            (vector? ctx) (p/for [ctx ctx] (Rec. ctx))
+                            (map? ctx)    (Rec. ctx)
+                            :else         ctx)))))]
+    (new Rec V)))
 
 ;; TODO Rename
 (p/defn JoinAllTheTree "Join all the tree, does not call renderers, return EDN." [V]
@@ -50,20 +55,14 @@
                       ctx)))]
     (new Rec V)))
 
-;; TODO Rename, this seems to just be "Render"
-(p/defn EdnRender "Join all the tree, calling renderers when provided, return EDN" [V]
-  (binding [Rec (p/fn [{:hyperfiddle.api/keys [type render Value] :as ctx}]
-                  (if render (render. ctx)
-                      (case type
-                        :hyperfiddle.api/leaf (Value.)
-                        :hyperfiddle.api/keys (into {} (p/for [[k ctx] (-drop-wildcards ctx)]
-                                                         [k (Rec. ctx)]))
-                        (let [ctx (Value.)]
-                          (cond
-                            (vector? ctx) (p/for [ctx ctx] (Rec. ctx))
-                            (map? ctx)    (Rec. ctx)
-                            :else         ctx)))))]
-    (new Rec V)))
+(p/defn JoinArg [ctx-or-V]
+  (if (map? ctx-or-V)
+    (JoinAllTheTree. ctx-or-V)
+    (new ctx-or-V)))
+
+(defn literal [collf & args] (collf args))    ; TODO rename
+
+(s/fdef literal :args (s/cat :collf fn? :args any?) :ret any?)
 
 (p/def Render JoinAllTheTree)
 

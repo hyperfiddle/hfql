@@ -18,7 +18,7 @@
             [missionary.core :as m]
             [hyperfiddle.history :as router])
   (:import (hyperfiddle.electric Pending))
-  #?(:cljs (:require-macros [hyperfiddle.hfql-tree-grid]))
+  #?(:cljs (:require-macros [hyperfiddle.hfql-tree-grid :refer [options-props cell input-props input-validator gray-input-props applier with-gridsheet-renderer*]]))
   #?(:cljs (:refer-clojure :exclude [List])))
 
 (defn attr-spec [attr]
@@ -127,6 +127,33 @@
 ;; This should not be see in userland because it’s an implementation detail
 ;; driven by Photon not supporting mutual recursion as of today.
 
+(defn get-computed-style [node] #?(:cljs (js/getComputedStyle node)))
+
+#?(:cljs
+   (defn ticker [interval-ms]
+     (m/observe (fn [!]
+                  (! ::tick)
+                  (let [ref (.setInterval js/window #(! ::tick) interval-ms)]
+                    #(.clearInterval js/window ref))))))
+
+(p/defn Sampler [rate-ms f]
+  (p/client
+    (if (= "visible" p/dom-visibility-state)
+      (new (m/relieve {} (m/eduction (dedupe) (m/sample f (ticker rate-ms))))) ; one ticker per sampler, not shared
+      (throw (Pending.)))))
+
+(p/defn ComputedStyle
+  "Calls the `keyfn` clojure function, passing it the given DOM node’s
+  CSSStyleDeclaration instance. `keyfn` is meant to extract properties from the
+  live computed style object."
+  ;; Does not return CSSStyleDeclaration directly because a CSSStyleDeclaration
+  ;; is a live object with a stable identity. m/cp would dedupe it even if
+  ;; properties might have changed.
+  ;; NOTE: beware of expensive keyfn
+  [keyfn node]
+  (let [live-object (get-computed-style node)]
+    (Sampler. 250 #(keyfn live-object))))
+
 (defmacro with-gridsheet-renderer* [& body]
   `(p/client ; FIXME don’t force body to run on the client
      (binding [grid-row 1
@@ -178,23 +205,24 @@
      (some? (seq (txn/filter-tx schema (fn [[_op e' a']] (and (= e e') (= a a'))) stage)))))
 
 (p/defn Options [ctx]
-  (let [options      (grab ctx ::hf/options)
-        option-label (grab ctx ::hf/option-label Identity)
-        continuation (grab ctx ::hf/continuation Identity)
-        tx           (grab ctx ::hf/tx)
-        tx?          (some? tx)
-        dom-props    (data/select-ns :hyperfiddle.electric-dom2 ctx)
-        v            (find-best-identity (hfql/JoinAllTheTree. ctx))
-        V!           (if tx? (p/fn [v] (tx. ctx v)) Identity)
-        OptionLabel  (p/fn [id] (option-label. (hfql/JoinAllTheTree. (continuation. id))))]
-    (case (->picker-type (has-needle? ctx) (= ::hf/many (Cardinality. ctx)))
-      ::typeahead (ui4/typeahead v V! options OptionLabel (options-props (not tx?) dom-props))
-      ::select    (ui4/select v V! options OptionLabel (options-props (not tx?) dom-props))
-      ::tag-picker (let [unV! (if-some [untx (grab ctx ::hf/untx)] (p/fn [v] (untx. ctx v)) Identity)]
-                     (ui4/tag-picker v V! unV! options OptionLabel
-                       (dom/props {::dom/class [(when (p/server (staged-statement? hf/schema hf/stage (::hf/entity ctx) (::hf/attribute ctx)))
-                                                  "hyperfiddle-input-dirty-staged")]})
-                       (options-props (not tx?) dom-props))))))
+  (p/server
+    (let [options      (grab ctx ::hf/options)
+          option-label (grab ctx ::hf/option-label Identity)
+          continuation (grab ctx ::hf/continuation Identity)
+          tx           (grab ctx ::hf/tx)
+          tx?          (some? tx)
+          dom-props    (data/select-ns :hyperfiddle.electric-dom2 ctx)
+          v            (find-best-identity (hfql/JoinAllTheTree. ctx))
+          V!           (if tx? (p/fn [v] (tx. ctx v)) Identity)
+          OptionLabel  (p/fn [id] (option-label. (hfql/JoinAllTheTree. (continuation. id))))]
+      (case (->picker-type (has-needle? ctx) (= ::hf/many (Cardinality. ctx)))
+        ::typeahead (ui4/typeahead v V! options OptionLabel (options-props (not tx?) dom-props))
+        ::select    (ui4/select v V! options OptionLabel (options-props (not tx?) dom-props))
+        ::tag-picker (let [unV! (if-some [untx (grab ctx ::hf/untx)] (p/fn [v] (untx. ctx v)) Identity)]
+                       (ui4/tag-picker v V! unV! options OptionLabel
+                         (dom/props {::dom/class [(when (p/server (staged-statement? hf/schema hf/stage (::hf/entity ctx) (::hf/attribute ctx)))
+                                                    "hyperfiddle-input-dirty-staged")]})
+                         (options-props (not tx?) dom-props)))))))
 
 (defmacro input-props [readonly? grid-row grid-col dom-for]
   `(do
@@ -243,6 +271,10 @@
              nil)               (ui4/input    (str label) Tx (input-props readonly? grid-row grid-col dom-for))))))))
 
 (p/defn Simple [ctx] (if (grab ctx ::hf/options) (Options. ctx) (Input. ctx)))
+
+(p/def Popover)
+(p/def Form)
+(p/def Table)
 
 ;; TODO adapt to new HFQL macroexpansion
 (p/defn Render-impl [{::hf/keys [type render popover Value] :as ctx}]
@@ -426,7 +458,7 @@
       (when (some? tx)
         (Apply. tx args)))))
 
-(p/def Form)
+(p/def default-height 10)
 
 (p/defn Form-impl [{::hf/keys [keys values] :as ctx}]
   (let [parent-ctx ctx
@@ -557,8 +589,6 @@
                          :?keys (::hf/keys ctx)})))))))))))
   nil)
 
-(p/def Popover)
-
 (p/defn Row [{::hf/keys [keys values] :as ctx}]
   (p/client
     (dom/tr
@@ -575,15 +605,12 @@
                                             Table Simple]
                                     (Render. ctx))))))))))))
 
-(p/def default-height 10)
-
 (defn clamp [lower-bound upper-bound number] (max lower-bound (min number upper-bound)))
 
 (defn give-card-n-contexts-a-unique-key [offset ctxs]
   (let [offset (max offset 0)]
     (into [] (map-indexed (fn [idx ctx] (assoc ctx ::key (+ offset idx)))) ctxs)))
 
-(p/def Table)
 (p/defn Table-impl [{::hf/keys [keys height Value] :as ctx}]
   (let [actual-count  (new (::hf/count ctx (p/fn [] 0)))
         actual-height (min (or height default-height) actual-count)
@@ -685,32 +712,6 @@
                      hf/page-take ~max-height]
              (p/client
                ~@body)))))))
-
-(defn get-computed-style [node] #?(:cljs (js/getComputedStyle node)))
-
-#?(:cljs
-   (defn ticker [interval-ms]
-     (m/observe (fn [!]
-                  (! ::tick)
-                  (let [ref (.setInterval js/window #(! ::tick) interval-ms)]
-                    #(.clearInterval js/window ref))))))
-
-(p/defn Sampler [rate-ms f]
-  (if (= "visible" p/dom-visibility-state)
-    (new (m/relieve {} (m/eduction (dedupe) (m/sample f (ticker rate-ms))))) ; one ticker per sampler, not shared
-    (throw (Pending.))))
-
-(p/defn ComputedStyle
-  "Calls the `keyfn` clojure function, passing it the given DOM node’s
-  CSSStyleDeclaration instance. `keyfn` is meant to extract properties from the
-  live computed style object."
-  ;; Does not return CSSStyleDeclaration directly because a CSSStyleDeclaration
-  ;; is a live object with a stable identity. m/cp would dedupe it even if
-  ;; properties might have changed.
-  ;; NOTE: beware of expensive keyfn
-  [keyfn node]
-  (let [live-object (get-computed-style node)]
-    (Sampler. 250 #(keyfn live-object))))
 
 (p/defn Text [RenderF]
   (p/fn [ctx]
